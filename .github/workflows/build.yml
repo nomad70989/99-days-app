@@ -1,5 +1,6 @@
 # 99 DAYS IN THE SAHARA - builds the real iPhone / iPad app on a free cloud Mac.
-# It takes the game from your itch.io page, builds the app and offers it for download:
+# It takes the game from the game/ folder of this repository (or from itch.io if that is missing),
+# builds the app and offers it for download:
 # open the finished run (Actions tab) and download "iphone-app" at the bottom.
 # Inside is NinetyNineDays.ipa - install it on the iPhone with Sideloadly (Windows).
 name: Build iPhone app
@@ -10,9 +11,9 @@ on:
   workflow_dispatch:
     inputs:
       game_url:
-        description: "itch.io game folder (where index.pck lives)"
+        description: "Leave empty to use the game/ folder. Or an itch.io game folder (where index.pck lives)"
         required: false
-        default: "https://html-classic.itch.zone/html/19498163/"
+        default: ""
 
 env:
   GODOT_VERSION: "4.7.2"
@@ -30,6 +31,9 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Get this repository (the newest game is in game/)
+        uses: actions/checkout@v4
+
       - name: Use the newest Xcode (Godot 4.7 needs the iOS 26 SDK)
         run: |
           XC=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
@@ -232,12 +236,19 @@ jobs:
           find ${APP}.xcframework MoltenVK.xcframework -name empty -delete
           ls ${APP}.xcframework
 
-      - name: Get the game from itch.io
+      - name: Get the game (from the game/ folder, or from itch.io)
         run: |
           set -e
-          REF="${GAME_URL}index.html"
-          curl -sSL --retry 3 -H "Referer: $REF" -A "Mozilla/5.0" -o web.pck "${GAME_URL}index.pck"
-          curl -sSL --retry 3 -H "Referer: $REF" -A "Mozilla/5.0" -o icon512.png "${GAME_URL}index.512x512.png"
+          if ls game/index.pck.part* > /dev/null 2>&1 && [ -z "${{ github.event.inputs.game_url }}" ]; then
+            echo "Using the game from the game/ folder of this repository"
+            cat game/index.pck.part* > web.pck
+            cp game/index.512x512.png icon512.png
+          else
+            echo "Using the game from $GAME_URL"
+            REF="${GAME_URL}index.html"
+            curl -sSL --retry 3 -H "Referer: $REF" -A "Mozilla/5.0" -o web.pck "${GAME_URL}index.pck"
+            curl -sSL --retry 3 -H "Referer: $REF" -A "Mozilla/5.0" -o icon512.png "${GAME_URL}index.512x512.png"
+          fi
           ls -la web.pck icon512.png
           test $(stat -f%z web.pck) -gt 1000000
           # same game, with the phone settings (native Metal graphics) instead of the web ones
