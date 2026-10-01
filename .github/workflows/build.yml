@@ -253,15 +253,16 @@ jobs:
         run: |
           set -e
           xcodebuild -project ${APP}.xcodeproj -scheme ${APP} -configuration Release \
-            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath dd \
+            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath "$RUNNER_TEMP/dd" \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" DEVELOPMENT_TEAM="" \
             build 2>&1 | tail -30
-          APPDIR=dd/Build/Products/Release-iphoneos/${APP}.app
+          APPDIR="$RUNNER_TEMP/dd/Build/Products/Release-iphoneos/${APP}.app"
           test -f "$APPDIR/${APP}"   # the app program itself must exist
           mkdir -p Payload
           cp -R "$APPDIR" Payload/
           zip -qry ${APP}.ipa Payload
           ls -la ${APP}.ipa
+          rm -rf Payload
 
       - name: Upload the app
         uses: actions/upload-artifact@v4
@@ -273,11 +274,13 @@ jobs:
       - name: Test - start the app in the iPhone simulator
         continue-on-error: true
         run: |
+          # Godot's simulator library is Intel-only, so the test app runs with Rosetta
+          sudo softwareupdate --install-rosetta --agree-to-license || true
           xcodebuild -project ${APP}.xcodeproj -scheme ${APP} -configuration Release \
-            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath ddsim \
-            ARCHS=arm64 ONLY_ACTIVE_ARCH=NO CODE_SIGNING_ALLOWED=NO \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath "$RUNNER_TEMP/ddsim" \
+            ARCHS=x86_64 ONLY_ACTIVE_ARCH=NO CODE_SIGNING_ALLOWED=NO \
             build 2>&1 | tail -15
-          SIMAPP=ddsim/Build/Products/Release-iphonesimulator/${APP}.app
+          SIMAPP="$RUNNER_TEMP/ddsim/Build/Products/Release-iphonesimulator/${APP}.app"
           DEV=$(xcrun simctl list devices available | grep -m1 -E "iPhone 1[5-9]" | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
           echo "simulator: $DEV"
           xcrun simctl boot "$DEV" || true
