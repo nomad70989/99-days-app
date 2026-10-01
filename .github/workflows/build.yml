@@ -22,9 +22,18 @@ env:
 
 jobs:
   ios:
-    runs-on: macos-15
+    runs-on: macos-26
+    defaults:
+      run:
+        shell: bash -eo pipefail {0}
     timeout-minutes: 60
     steps:
+      - name: Use the newest Xcode (Godot 4.7 needs the iOS 26 SDK)
+        run: |
+          XC=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          if [ -n "$XC" ]; then sudo xcode-select -s "$XC"; fi
+          xcodebuild -version
+
       - name: Unpack the Xcode project (made with Godot's iOS export)
         run: |
           set -e
@@ -248,7 +257,7 @@ jobs:
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" DEVELOPMENT_TEAM="" \
             build 2>&1 | tail -30
           APPDIR=dd/Build/Products/Release-iphoneos/${APP}.app
-          test -d "$APPDIR"
+          test -f "$APPDIR/${APP}"   # the app program itself must exist
           mkdir -p Payload
           cp -R "$APPDIR" Payload/
           zip -qry ${APP}.ipa Payload
