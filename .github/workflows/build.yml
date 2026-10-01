@@ -27,6 +27,8 @@ jobs:
       run:
         shell: bash -eo pipefail {0}
     timeout-minutes: 60
+    permissions:
+      contents: write
     steps:
       - name: Use the newest Xcode (Godot 4.7 needs the iOS 26 SDK)
         run: |
@@ -288,9 +290,14 @@ jobs:
           xcrun simctl install "$DEV" "$SIMAPP"
           xcrun simctl launch --console-pty "$DEV" ${BUNDLE_ID} > sim_console.log 2>&1 &
           mkdir -p shots
-          for t in 25 50 90; do sleep 25; xcrun simctl io "$DEV" screenshot shots/shot_${t}s.png || true; done
+          # the Intel test build needs ~2 minutes to start under Rosetta
+          for t in 120 160 200 240; do sleep 40; xcrun simctl io "$DEV" screenshot shots/shot_${t}s.png || true; done
           xcrun simctl spawn "$DEV" log show --last 5m --predicate 'process == "NinetyNineDays"' --style compact > sim_log.txt 2>&1 || true
           tail -60 sim_console.log || true
+          # put small copies of the screenshots on the 'sim-shots' branch so they can be looked at in the browser
+          mkdir -p pub && for f in shots/*.png; do sips -s format jpeg -s formatOptions 60 -Z 900 "$f" --out "pub/$(basename "${f%.png}").jpg" > /dev/null; done
+          cp sim_console.log pub/ 2>/dev/null || true
+          cd pub && git init -q && git checkout -q -b sim-shots && git add . && git -c user.name=ci -c user.email=ci@users.noreply.github.com commit -qm "simulator screenshots" && git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" sim-shots
 
       - name: Upload the simulator test
         if: always()
